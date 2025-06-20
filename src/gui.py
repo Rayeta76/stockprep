@@ -1,37 +1,85 @@
-# gui.py - Interfaz gráfica básica para StockPrep
-
-import tkinter as tk
-from core_logic import procesar_lote_imagenes
 import os
+import threading
+import tkinter as tk
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-class StockPrepGUI:
-    def __init__(self, master):
+try:
+    from .core_logic import ejecutar_procesamiento_stockprep
+except ImportError:
+    from core_logic import ejecutar_procesamiento_stockprep  # type: ignore
+
+
+class StockPrepAppGUI:
+    """Interfaz gráfica principal de StockPrep."""
+
+    def __init__(self, master: tk.Tk) -> None:
         self.master = master
-        master.title("StockPrep - Automatización de Metadatos")
-        self.master.geometry("600x250")
-        self.directorio_actual = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        self.status_text = tk.StringVar()
-        self.status_text.set("Listo para procesar imágenes.")
+        self.master.title("StockPrep – Procesador de imágenes (simulado)")
+        self.master.geometry("800x650")
 
-        self.label = tk.Label(master, text="StockPrep: Automatización de metadatos para imágenes de stock")
-        self.label.pack(pady=10)
+        # ---------- Selección de carpeta ----------
+        self.base_dir_var = tk.StringVar(master)
+        proyecto = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        self.base_dir_var.set(proyecto)
 
-        self.procesar_btn = tk.Button(master, text="Procesar imágenes", command=self.iniciar_procesamiento)
-        self.procesar_btn.pack(pady=10)
+        dir_frame = ttk.Frame(master, padding=10)
+        dir_frame.pack(fill=tk.X)
 
-        self.status = tk.Label(master, textvariable=self.status_text, fg="blue")
-        self.status.pack(pady=10)
+        ttk.Button(
+            dir_frame,
+            text="Seleccionar carpeta del proyecto",
+            command=self.select_project_directory,
+        ).pack(side=tk.LEFT, padx=(0, 10))
 
-    def log(self, mensaje):
-        self.status_text.set(mensaje)
-        self.master.update()
+        ttk.Label(dir_frame, text="Directorio actual:").pack(side=tk.LEFT)
+        ttk.Label(dir_frame, textvariable=self.base_dir_var, relief="sunken").pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
 
-    def iniciar_procesamiento(self):
-        self.log("Procesando imágenes, por favor espera...")
-        procesar_lote_imagenes(self.log, self.directorio_actual, "imagenes")
-        self.log("Proceso finalizado.")
+        # ---------- Botón principal ----------
+        self.process_button = ttk.Button(
+            master,
+            text="Iniciar procesamiento",
+            command=self.start_processing_thread,
+            style="Accent.TButton",
+        )
+        self.process_button.pack(pady=15)
+
+        # ---------- Área de log ----------
+        ttk.Label(master, text="Registro de actividad:").pack(anchor=tk.W, padx=10)
+        self.log = scrolledtext.ScrolledText(master, height=20, state=tk.DISABLED)
+        self.log.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+    # ----- callbacks GUI -----
+    def gui_status_update(self, msg: str) -> None:
+        self.master.after(0, lambda: self._append(msg))
+
+    def _append(self, msg: str) -> None:
+        self.log.config(state=tk.NORMAL)
+        self.log.insert(tk.END, msg + "\n")
+        self.log.see(tk.END)
+        self.log.config(state=tk.DISABLED)
+
+    def select_project_directory(self) -> None:
+        nuevo = filedialog.askdirectory(initialdir=self.base_dir_var.get())
+        if nuevo:
+            self.base_dir_var.set(nuevo)
+
+    def start_processing_thread(self) -> None:
+        self.process_button.config(state=tk.DISABLED)
+        th = threading.Thread(
+            target=self.run_processing, args=(self.base_dir_var.get(),), daemon=True
+        )
+        th.start()
+
+    def run_processing(self, carpeta: str) -> None:
+        try:
+            ejecutar_procesamiento_stockprep(carpeta, self.gui_status_update)
+        finally:
+            self.master.after(0, lambda: self.process_button.config(state=tk.NORMAL))
+
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = StockPrepGUI(root)
-    root.mainloop()
+    tk_root = tk.Tk()
+    app = StockPrepAppGUI(tk_root)
+    tk_root.mainloop()

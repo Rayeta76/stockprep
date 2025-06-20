@@ -1,60 +1,54 @@
-# core_logic.py - Núcleo de procesamiento de imágenes y generación de metadatos externos
-
 import os
-import csv
-from procesar_imagen import cargar_modelo_blip, describir_imagen_blip, generar_keywords
-from utils import limpiar_nombre_archivo, crear_directorios, guardar_json, guardar_xml, guardar_log, renombrar_imagen
+from typing import Callable, List, Tuple
 
-def procesar_lote_imagenes(status_callback, base_dir, carpeta_relativa_imagenes):
-    carpetas = {
-        'imagenes': os.path.join(base_dir, carpeta_relativa_imagenes),
-        'logs': os.path.join(base_dir, 'logs'),
-        'metadatos': os.path.join(base_dir, 'metadatos'),
-        'xml': os.path.join(base_dir, 'xml'),
-        'resultados': os.path.join(base_dir, 'resultados')
-    }
-    crear_directorios(carpetas.values())
-    imagenes = [f for f in os.listdir(carpetas['imagenes']) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    if not imagenes:
-        status_callback("No se encontraron imágenes JPG/JPEG/PNG en la carpeta.")
+from . import utils
+from . import procesar_imagen as proc_img
+
+StatusCb = Callable[[str], None]
+
+
+def _listar_imagenes(carpeta: str) -> List[str]:
+    extensiones = (".jpg", ".jpeg", ".png")
+    return [
+        f for f in os.listdir(carpeta) if f.lower().endswith(extensiones)
+    ]
+
+
+def ejecutar_procesamiento_stockprep(base_dir: str, status_callback: StatusCb = print) -> None:
+    status_callback("=" * 46)
+    status_callback(f"Procesando proyecto StockPrep en: {base_dir}")
+    status_callback("=" * 46)
+
+    if not utils.crear_carpetas_estructura(base_dir, status_callback):
+        status_callback("ERROR: estructura de carpetas incompleta. Abortando.")
         return
 
-    processor, model = cargar_modelo_blip()
-    csv_resultados = []
+    carpetas = {c: os.path.join(base_dir, c) for c in utils.CARPETAS_PROYECTO}
+    imagenes = _listar_imagenes(carpetas["imagenes"])
+    if not imagenes:
+        status_callback("No se encontraron imágenes para procesar.")
+        return
 
-    for imagen in imagenes:
-        ruta_imagen = os.path.join(carpetas['imagenes'], imagen)
-        descripcion = describir_imagen_blip(ruta_imagen, processor, model).strip()
-        titulo = descripcion.split('.')[0][:70] if descripcion else "Untitled"
-        titulo = limpiar_nombre_archivo(titulo)
+    status_callback(f"Total imágenes encontradas: {len(imagenes)}")
 
-        nombre_sin_ext = os.path.splitext(titulo)[0]
-        nuevo_nombre = renombrar_imagen(ruta_imagen, nombre_sin_ext, carpetas['imagenes'])
-        ruta_nueva_imagen = os.path.join(carpetas['imagenes'], nuevo_nombre)
+    proc, modelo, _gpu = proc_img.cargar_modelo_ia(status_callback)
+    resultados: List[Tuple[str, str, List[str]]] = []
 
-        keywords = generar_keywords(descripcion)
-        keywords_str = ', '.join(keywords)
+    for idx, nombre in enumerate(imagenes, start=1):
+        status_callback(f"\n[ {idx}/{len(imagenes)} ] -> {nombre}")
 
-        datos = {
-            'filename': nuevo_nombre,
-            'title': titulo,
-            'description': descripcion,
-            'keywords': keywords_str
-        }
+        ruta = os.path.join(carpetas["imagenes"], nombre)
+        desc = proc_img.describir_imagen_ia(ruta, proc, modelo, status_callback)
+        titulo_raw = desc.split(".")[0][:60]
+        titulo = utils.limpiar_nombre_archivo(titulo_raw, status_callback)
+        hashtags = proc_img.extraer_hashtags(desc, status_callback=status_callback)
+        origen = utils.detectar_aplicacion_origen(nombre)
+        status_callback(f"  Título simulado : {titulo}")
+        status_callback(f"  Hashtags simul.  : {hashtags}")
+        status_callback(f"  Origen detectado : {origen}")
 
-        guardar_log(os.path.join(carpetas['logs'], titulo + '.log'),
-                    f"Imagen: {nuevo_nombre}\nTitulo: {titulo}\nDescripcion: {descripcion}\nKeywords: {keywords_str}")
-        guardar_json(os.path.join(carpetas['metadatos'], titulo + '.json'), datos)
-        guardar_xml(os.path.join(carpetas['xml'], titulo + '.xml'), datos)
+        resultados.append((titulo, desc, hashtags))
 
-        csv_resultados.append([nuevo_nombre, titulo, descripcion, keywords_str])
-        status_callback(f"Procesada: {nuevo_nombre}")
-
-    ruta_csv = os.path.join(carpetas['resultados'], 'imagenes_stock.csv')
-    with open(ruta_csv, 'w', newline='', encoding='utf-8') as fcsv:
-        writer = csv.writer(fcsv)
-        writer.writerow(['filename', 'title', 'description', 'keywords'])
-        writer.writerows(csv_resultados)
-    status_callback("\n¡PROCESO FINALIZADO! CSV global y archivos individuales generados correctamente.")
+    status_callback("\nProceso simulado completado.")
 
 
