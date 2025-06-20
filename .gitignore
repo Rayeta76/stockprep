@@ -192,9 +192,15 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+<<<<<<< HEAD
 
+=======
+>>>>>>> 88ba70a (chore(gitignore): excluir *.jpg y resultados/)
 # Archivos de salida
 *.jpg
 *.png
 resultados/
+<<<<<<< HEAD
 
+=======
+>>>>>>> 88ba70a (chore(gitignore): excluir *.jpg y resultados/)
