@@ -1,0 +1,2 @@
+# stockprep
+Reconocimiento de imagenes
