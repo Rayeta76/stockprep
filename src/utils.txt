@@ -1,0 +1,63 @@
+# e:\Proyectos\StockPrep\src\utils.py
+
+import os
+import re
+
+# --- Funciones de Utilidad Básicas ---
+
+def crear_carpetas_estructura(base_dir, status_callback=print):
+    """Crea la estructura de carpetas necesaria si no existe."""
+    carpetas_a_crear = ['imagenes', 'logs', 'metadatos', 'xml', 'resultados']
+    status_callback(f"INFO: Verificando/creando estructura de carpetas en: {base_dir}")
+    all_ok = True
+    for carpeta in carpetas_a_crear:
+        ruta_carpeta = os.path.join(base_dir, carpeta)
+        if not os.path.exists(ruta_carpeta):
+            try:
+                os.makedirs(ruta_carpeta)
+                status_callback(f"  Directorio creado: {os.path.basename(ruta_carpeta)}")
+            except OSError as e:
+                status_callback(f"  ERROR al crear directorio {os.path.basename(ruta_carpeta)}: {e}")
+                all_ok = False
+    return all_ok
+
+
+def limpiar_nombre_archivo(nombre_original, status_callback=print):
+    """Limpia un nombre de archivo de caracteres no válidos y lo acorta."""
+    # Esta es una versión básica. La mejoraremos después para XML y longitud.
+    if not nombre_original:
+        # status_callback("Advertencia: Nombre de archivo vacío para limpiar.") # Menos verboso
+        return "imagen_sin_titulo"
+    
+    nombre_limpio = str(nombre_original) # Asegurar que sea string
+    # Eliminar caracteres comunes no válidos para nombres de archivo
+    nombre_limpio = re.sub(r'[\\/*?:"<>|]', '', nombre_limpio)
+    # Reemplazar espacios con guiones bajos (simplificado)
+    nombre_limpio = nombre_limpio.replace(' ', '_').strip()
+    # Opcional: Limitar longitud si es necesario, lo haremos en una versión posterior más robusta.
+
+    return nombre_limpio if nombre_limpio else "imagen_sin_titulo"
+
+
+def detectar_aplicacion_origen(nombre_archivo_original):
+    """Detecta la posible aplicación de origen basándose en el nombre del archivo."""
+    # Esta función no necesita status_callback ya que solo devuelve un valor.
+    if not isinstance(nombre_archivo_original, str):
+         return "Desconocida"
+         
+    nombre_lower = nombre_archivo_original.lower()
+    aplicaciones_conocidas = {
+        "freepik": "Freepik AI", "midjourney": "Midjourney", "dall-e": "DALL-E",
+        "dalle": "DALL-E", "leonardo": "Leonardo.Ai", "leonardoai": "Leonardo.Ai",
+        "stable diffusion": "Stable Diffusion", "stablediffusion": "Stable Diffusion",
+        "sdxl": "Stable Diffusion XL", "fooocus": "Fooocus", "comfyui": "ComfyUI",
+    }
+    # Usar re.search con word boundaries (\b) para encontrar la palabra exacta
+    # y re.escape para manejar keywords con caracteres especiales
+    # y [_\s-]? para permitir guiones o espacios opcionales entre palabras clave compuestas
+    for keyword, app_name in aplicaciones_conocidas.items():
+        if re.search(r'\b' + re.escape(keyword.replace(" ", r"[_\s-]?")) + r'\b', nombre_lower):
+            return app_name
+    return "Desconocida"
+
+# No hay "if __name__ == '__main__':" en este archivo, ya que es solo un módulo de utilidades.

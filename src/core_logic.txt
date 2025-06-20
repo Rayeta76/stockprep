@@ -1,0 +1,133 @@
+# e:\Proyectos\StockPrep\src\core_logic.py
+
+import os
+import csv # Aunque no guardaremos CSV aún, lo preparamos
+import traceback # Útil para depuración
+
+# Importar las funciones de nuestros otros módulos
+# Usamos import relativos porque están en el mismo paquete 'src'
+from . import utils
+from . import procesar_imagen # Por ahora, es la versión SIMULADA
+
+# --- Lógica Principal del Procesamiento ---
+
+def ejecutar_procesamiento_stockprep(base_dir, status_callback=print):
+    """
+    Función principal que orquesta el procesamiento de imágenes.
+    Utiliza las funciones de utils.py y procesar_imagen.py.
+    :param base_dir: La ruta a la carpeta raíz del proyecto (ej: StockPrep).
+    :param status_callback: Función para enviar mensajes de estado.
+    """
+    status_callback("-------------------------------------------")
+    status_callback(f"INICIANDO PROCESAMIENTO ORQUESTADO EN: {base_dir}")
+    status_callback("-------------------------------------------")
+
+    # 1. Verificar/crear estructura de carpetas
+    # Aquí llamamos a la función de utils.py y le pasamos nuestro status_callback
+    if not utils.crear_carpetas_estructura(base_dir, status_callback):
+        status_callback("ERROR FATAL: No se pudo crear/verificar la estructura de carpetas. Abortando.")
+        return # Salir de la función si falla
+
+    # Definir rutas a las subcarpetas basándonos en base_dir
+    carpetas = {
+        'imagenes': os.path.join(base_dir, 'imagenes'),
+        'logs': os.path.join(base_dir, 'logs'),
+        'metadatos': os.path.join(base_dir, 'metadatos'),
+        'xml': os.path.join(base_dir, 'xml'),
+        'resultados': os.path.join(base_dir, 'resultados')
+    }
+
+    # 2. Encontrar las imágenes a procesar
+    if not os.path.isdir(carpetas['imagenes']):
+        status_callback(f"ERROR: La carpeta '{os.path.basename(carpetas['imagenes'])}' no existe en {base_dir}.")
+        status_callback("Por favor, créala y añade imágenes (.jpg, .jpeg, .png). Abortando.")
+        return
+
+    extensiones_soportadas = ('.jpg', '.jpeg', '.png')
+    try:
+        archivos_en_carpeta_imagenes = os.listdir(carpetas['imagenes'])
+        imagenes_a_procesar_originales = [f for f in archivos_en_carpeta_imagenes if f.lower().endswith(extensiones_soportadas)]
+    except Exception as e:
+         status_callback(f"ERROR: No se pudo listar archivos en '{carpetas['imagenes']}': {e}")
+         return
+
+
+    if not imagenes_a_procesar_originales:
+        status_callback(f"AVISO: No se encontraron imágenes ({', '.join(extensiones_soportadas)}) en '{carpetas['imagenes']}'.")
+        status_callback("Proceso finalizado sin imágenes que procesar.")
+        return
+
+    status_callback(f"Se encontraron {len(imagenes_a_procesar_originales)} imágenes para procesar.")
+
+    # 3. "Cargar" el modelo de IA (versión simulada por ahora)
+    # Aquí llamamos a la función de procesar_imagen.py y le pasamos nuestro status_callback
+    proc_ia_dummy, mod_ia_dummy, gpu_info_dummy = procesar_imagen.cargar_modelo_ia(status_callback=status_callback)
+
+    # En la versión real, verificaríamos si la carga fue exitosa.
+    # Por ahora, como es simulado, asumimos que siempre funciona a menos que modifiques dummy_procesar_imagen.py
+    # if not proc_ia_dummy or not mod_ia_dummy:
+    #     status_callback("ERROR FATAL: No se pudo cargar el modelo de IA simulado. Revisa los mensajes anteriores. Abortando.")
+    #     return
+
+    # --- Inicio del Bucle de Procesamiento por Imagen ---
+    # No guardaremos resultados reales por imagen todavía
+
+    total_imagenes = len(imagenes_a_procesar_originales)
+
+    for i, nombre_img_original_con_ext in enumerate(imagenes_a_procesar_originales):
+        status_callback(f"\n--- Procesando imagen ({i+1}/{total_imagenes}): {nombre_img_original_con_ext} ---")
+        ruta_img_original = os.path.join(carpetas['imagenes'], nombre_img_original_con_ext)
+
+        # 4. "Describir" imagen con IA (versión simulada)
+        # Llamamos a la función simulada y le pasamos nuestro status_callback
+        descripcion_simulada = procesar_imagen.describir_imagen_ia(ruta_img_original, proc_ia_dummy, mod_ia_dummy, status_callback, task_prompt="<MORE_DETAILED_CAPTION>")
+        
+        # 5. Generar título a partir de la descripción simulada
+        # Usamos una lógica muy simple por ahora
+        if descripcion_simulada.startswith("Error"):
+             titulo_propuesto_raw = "sin_titulo_simulado"
+        else:
+             palabras_desc = descripcion_simulada.split('.')[0].split(',')[0].split()
+             titulo_propuesto_raw = "_".join(palabras_desc[:6]) if palabras_desc else "sin_titulo_simulado"
+
+        # Limpiamos el título (usando la función de utils.py)
+        titulo_limpio_para_nombre = utils.limpiar_nombre_archivo(titulo_propuesto_raw, status_callback)
+        if not titulo_limpio_para_nombre or titulo_limpio_para_nombre == "_":
+             titulo_limpio_para_nombre = f"imagen_simulada_{i+1}"
+
+
+        # 6. Extraer hashtags (versión simulada)
+        # Llamamos a la función simulada y le pasamos nuestro status_callback
+        hashtags_simulados = procesar_imagen.extraer_hashtags(descripcion_simulada, status_callback=status_callback)
+
+        # 7. Detectar aplicación de origen (usando la función de utils.py)
+        app_origen_detectada = utils.detectar_aplicacion_origen(nombre_img_original_con_ext)
+        status_callback(f"  App Origen Detectada: {app_origen_detectada}")
+
+        # --- Aquí iría la lógica REAL de renombrado y guardado de archivos ---
+        # En esta versión básica, solo reportamos lo que haríamos
+
+        status_callback(f"  Simulación: Se generaría el título: '{titulo_limpio_para_nombre}'")
+        status_callback(f"  Simulación: Se extraerían los hashtags: {hashtags_simulados}")
+        status_callback(f"  Simulación: Se escribirían metadatos EXIF en '{nombre_img_original_con_ext}'")
+        status_callback(f"  Simulación: Se guardarían .log, .json, .xml con base '{titulo_limpio_para_nombre}'")
+        status_callback(f"  Simulación: Se añadiría una fila al CSV global.")
+
+        # Aquí también añadiríamos los datos a una lista para el CSV global, como antes
+        # csv_resultados_lista.append([ ... ])
+
+
+    # --- Fin del Bucle ---
+
+    # Aquí iría la lógica REAL de guardar el CSV global
+    # if csv_resultados_lista:
+    #    status_callback("\nSimulación: Se guardaría el CSV global.")
+    #    ruta_csv_global = os.path.join(carpetas['resultados'], 'stockprep_resultados_simulados.csv')
+    #    ... guardar csv ...
+
+
+    status_callback("-------------------------------------------")
+    status_callback("¡PROCESAMIENTO ORQUESTADO FINALIZADO (SIMULADO)! ")
+    status_callback("-------------------------------------------")
+
+# No hay "if __name__ == '__main__':" aquí. core_logic.py es solo un módulo.

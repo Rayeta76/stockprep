@@ -1,0 +1,240 @@
+# e:\Proyectos\StockPrep\src\gui.py
+
+import tkinter as tk
+from tkinter import filedialog, ttk, scrolledtext, messagebox # Importamos messagebox para los popups de error
+import os
+import threading # Para ejecutar la lógica pesada en segundo plano
+import traceback # Para mostrar detalles de errores en el log
+
+# Importar la lógica principal de procesamiento desde core_logic.py
+# Usamos import relativo porque core_logic.py está en el mismo paquete 'src'
+try:
+    from .core_logic import ejecutar_procesamiento_stockprep
+except ImportError:
+    # Este bloque es un FALLBACK. Si ejecutas gui.py directamente para probar la UI,
+    # el import relativo puede fallar. En ese caso, intenta un import directo.
+    # Sin embargo, la forma principal de ejecutar será a través de main.py
+    # que maneja los imports relativos correctamente.
+    print("ADVERTENCIA: Falló el import relativo en gui.py. Intentando import directo.")
+    try:
+        from core_logic import ejecutar_procesamiento_stockprep
+    except ImportError:
+        print("ERROR FATAL: No se pudo importar 'ejecutar_procesamiento_stockprep' de core_logic.")
+        print("Asegúrate de que core_logic.py existe y no tiene errores, y de que estás ejecutando desde el directorio correcto.")
+        # Definir como None para evitar NameError si falla en tiempo de ejecución
+        ejecutar_procesamiento_stockprep = None
+
+
+# --- Clase de la Aplicación GUI ---
+
+class StockPrepAppGUI:
+    def __init__(self, master_window):
+        """Inicializa la interfaz gráfica."""
+        self.master = master_window # La ventana principal (tk.Tk())
+        self.master.title("StockPrep - Procesador de Imágenes Inteligente v0.2 (Simulado)") # Título de la ventana (Actualizado)
+        self.master.geometry("800x650") # Tamaño inicial de la ventana
+
+        # --- Configuración del Estilo (Opcional, para mejorar apariencia) ---
+        # Esto le da un aspecto un poco más moderno a los widgets ttk
+        style = ttk.Style()
+        style.theme_use('clam') # 'clam', 'alt', 'default', 'vista', 'xpnative' son opciones
+        style.configure("TButton", padding=6, relief="flat", background="#ccc")
+        style.map("TButton", background=[('active', '#eee')]) # Cambia color al pasar mouse
+        # Estilo para el botón principal de procesamiento
+        style.configure("Accent.TButton", font=('Helvetica', 10, 'bold'), foreground='white', background='#0078D7')
+        style.map("Accent.TButton", background=[('active', '#005A9E')])
+
+
+        # --- Selección de Directorio del Proyecto ---
+        # Variable especial de Tkinter que guardará la ruta del directorio base
+        # tk.StringVar permite que las etiquetas se actualicen automáticamente
+        self.base_dir_var = tk.StringVar(self.master)
+        # Intentar autodetectar el directorio raíz del proyecto
+        # Asume que gui.py está en src/ y el proyecto es el directorio padre
+        script_dir = os.path.dirname(os.path.abspath(__file__)) # Directorio de este script (src)
+        project_root_guess = os.path.abspath(os.path.join(script_dir, '..')) # Subir un nivel (StockPrep)
+        self.base_dir_var.set(project_root_guess) # Establecer el valor inicial
+
+        # Frame para organizar los widgets de selección de directorio
+        dir_frame = ttk.Frame(self.master, padding="10 10 10 5") # padding left, top, right, bottom
+        dir_frame.pack(fill=tk.X, padx=10, pady=5) # fill=tk.X expande horizontalmente, padx/pady son márgenes
+
+        # Botón para abrir el diálogo de selección de carpeta
+        select_dir_button = ttk.Button(dir_frame, text="Seleccionar Carpeta Raíz del Proyecto", command=self.select_project_directory)
+        select_dir_button.pack(side=tk.LEFT, padx=(0, 10)) # side=tk.LEFT coloca el botón a la izquierda
+
+        # Etiqueta que muestra la ruta del directorio seleccionado
+        dir_label_prefix = ttk.Label(dir_frame, text="Directorio Actual:")
+        dir_label_prefix.pack(side=tk.LEFT)
+        # Etiqueta que mostrará el valor de self.base_dir_var y se actualizará automáticamente
+        self.dir_label_display = ttk.Label(dir_frame, textvariable=self.base_dir_var, wraplength=500, relief="sunken", padding=2) # wraplength ajusta texto largo
+        self.dir_label_display.pack(side=tk.LEFT, fill=tk.X, expand=True) # fill/expand hacen que la etiqueta ocupe el espacio restante
+
+
+        # --- Instrucciones al Usuario ---
+        # Variable para el texto de las instrucciones
+        self.info_text_var = tk.StringVar(self.master)
+        self.update_info_label_text() # Llama a la función para establecer el texto inicial
+        # 'trace_add("write", ...)' hace que update_info_label_text se llame
+        # cada vez que el valor de self.base_dir_var cambie
+        self.base_dir_var.trace_add("write", self.update_info_label_text) # Cada vez que base_dir_var cambie ("write"), llama a la función
+
+        # Frame para las instrucciones
+        instructions_frame = ttk.Frame(self.master, padding="10 0 10 10")
+        instructions_frame.pack(fill=tk.X, padx=10)
+        # Etiqueta para mostrar las instrucciones
+        info_label = ttk.Label(instructions_frame, textvariable=self.info_text_var, justify=tk.LEFT)
+        info_label.pack(anchor=tk.W) # anchor=tk.W alinea el texto a la izquierda (West)
+
+
+        # --- Botón de Procesamiento y Barra de Progreso (si se usa) ---
+        # Frame para centrar el botón
+        action_frame = ttk.Frame(self.master, padding="0 10 0 10")
+        action_frame.pack(pady=10)
+
+        # Botón para iniciar el proceso
+        self.process_button = ttk.Button(action_frame, text="✨ Iniciar Procesamiento de Imágenes ✨", command=self.start_processing_thread, style="Accent.TButton")
+        self.process_button.pack() # Centrado en su frame
+
+        # Barra de progreso (comentada por ahora, se usaría para mostrar el progreso individual de cada imagen)
+        # self.progress_bar = ttk.Progressbar(action_frame, orient="horizontal", length=300, mode="determinate")
+        # self.progress_bar.pack(pady=(0, 10))
+
+
+        # --- Área de Estado/Log de la GUI ---
+        # Etiqueta para el área de log
+        status_title_label = ttk.Label(self.master, text="Registro de Actividad y Estado del Proceso:", font=('Helvetica', 10, 'bold'), padding="10 5 10 0")
+        status_title_label.pack(anchor=tk.W, padx=10)
+
+        # Área de texto con scrollbar para mostrar los mensajes de estado
+        self.status_text_widget = scrolledtext.ScrolledText(self.master, height=18, wrap=tk.WORD, state=tk.DISABLED, relief="solid", bd=1) # wrap=tk.WORD para que el texto salte de línea por palabras
+        self.status_text_widget.pack(pady=(0,10), padx=10, fill=tk.BOTH, expand=True) # fill=tk.BOTH/expand hacen que ocupe el espacio restante
+
+
+    # --- Métodos de la Clase StockPrepAppGUI ---
+
+    def select_project_directory(self):
+        """Abre un diálogo para seleccionar la carpeta base del proyecto."""
+        initial_dir_to_show = self.base_dir_var.get()
+        if not os.path.isdir(initial_dir_to_show): # Si la ruta actual no es válida, empezar desde el home del usuario
+            initial_dir_to_show = os.path.expanduser("~")
+
+        selected_directory = filedialog.askdirectory(
+            initialdir=initial_dir_to_show,
+            title="Selecciona la carpeta raíz de tu proyecto StockPrep"
+        )
+        if selected_directory: # Si el usuario seleccionó una carpeta (no canceló)
+            self.base_dir_var.set(os.path.abspath(selected_directory)) # Establece la ruta absoluta en la variable Tkinter
+            # La etiqueta se actualizará automáticamente por el trace
+            self.gui_status_update(f"INFO: Carpeta del proyecto establecida en: {self.base_dir_var.get()}")
+
+
+    def update_info_label_text(self, *args):
+        """Actualiza el texto de la etiqueta informativa basándose en el directorio seleccionado."""
+        current_base_dir = self.base_dir_var.get()
+        path_to_images_folder = os.path.join(current_base_dir, 'imagenes')
+        self.info_text_var.set( # Establece el texto en la variable Tkinter
+            f"1. Verifica que esta es la carpeta raíz correcta de tu proyecto StockPrep.\n"
+            f"2. Asegúrate de que las imágenes a procesar están en la subcarpeta:\n   '{path_to_images_folder}'\n"
+            f"3. Los resultados (simulados por ahora) se guardarían en subcarpetas ('logs', 'metadatos', etc.) dentro de:\n   '{current_base_dir}'"
+        )
+
+    def gui_status_update(self, message):
+        """
+        Función de callback para actualizar el widget ScrolledText de estado.
+        Es segura para ser llamada desde otro hilo.
+        Este método será el status_callback que pasaremos a core_logic.
+        """
+        # winfo_exists() comprueba si el widget todavía existe (la ventana no ha sido cerrada)
+        if self.master.winfo_exists():
+            # Los cambios a widgets de Tkinter deben hacerse en el hilo principal.
+            # self.master.after(0, ...) programa una función para ejecutarse en el hilo principal
+            # tan pronto como sea posible (después de 0 milisegundos).
+            self.master.after(0, lambda: self._append_to_status_text(message))
+
+    def _append_to_status_text(self, message):
+         """Método interno para añadir mensajes al ScrolledText (ejecutado en hilo principal)."""
+         self.status_text_widget.config(state=tk.NORMAL) # Habilitar para escribir
+         self.status_text_widget.insert(tk.END, message + "\n") # Insertar al final
+         self.status_text_widget.see(tk.END) # Hacer scroll al final
+         self.status_text_widget.config(state=tk.DISABLED) # Deshabilitar de nuevo
+
+
+    def start_processing_thread(self):
+        """Valida el directorio, limpia el estado e inicia la tarea de procesamiento en un nuevo hilo."""
+        selected_dir = self.base_dir_var.get()
+
+        # Validaciones básicas del directorio antes de empezar
+        if not os.path.isdir(selected_dir):
+            error_msg = "ERROR: El directorio del proyecto seleccionado no es válido o no existe."
+            self.gui_status_update(error_msg)
+            messagebox.showerror("Error de Directorio", error_msg + "\nPor favor, selecciona una carpeta válida.")
+            return
+
+        # Validar que la subcarpeta 'imagenes' existe dentro del directorio seleccionado
+        path_to_imagenes_folder_check = os.path.join(selected_dir, 'imagenes')
+        if not os.path.isdir(path_to_imagenes_folder_check):
+             error_msg = f"ERROR: La subcarpeta 'imagenes' no existe en '{selected_dir}'."
+             self.gui_status_update(error_msg)
+             messagebox.showerror("Error de Directorio", error_msg + "\n\nAsegúrate de que la carpeta seleccionada es la raíz del proyecto y que contiene una subcarpeta 'imagenes'.")
+             return
+
+
+        # Limpiar área de estado antes de un nuevo procesamiento
+        self.status_text_widget.config(state=tk.NORMAL)
+        self.status_text_widget.delete(1.0, tk.END) # Borra todo el contenido desde la primera línea (1.0) hasta el final (tk.END)
+        self.status_text_widget.config(state=tk.DISABLED)
+
+        self.process_button.config(state=tk.DISABLED) # Deshabilitar botón durante el proceso
+        self.gui_status_update(f"INFO: Usando directorio base para procesamiento: {selected_dir}")
+
+        # Crear y empezar el hilo para la tarea de procesamiento.
+        # La función 'target' es la que se ejecutará en el nuevo hilo.
+        # 'args' son los argumentos que se le pasan a la función 'target'.
+        self.processing_thread_obj = threading.Thread(
+            target=self.run_core_processing_logic, # Este método llamará a la lógica principal (core_logic)
+            args=(selected_dir,) # Le pasamos el directorio seleccionado como argumento
+        )
+        self.processing_thread_obj.daemon = True # Hace que el hilo se cierre automáticamente si el programa principal termina
+        self.processing_thread_obj.start() # Inicia la ejecución del hilo
+
+
+    def run_core_processing_logic(self, directory_to_process):
+        """
+        Este método se ejecuta en el hilo secundario (no el hilo principal de la GUI).
+        Llama a la función principal de procesamiento y maneja el estado del botón al finalizar.
+        """
+        try:
+            # Llamamos a la función principal de core_logic
+            # Le pasamos el directorio base y nuestro método gui_status_update como callback
+            if ejecutar_procesamiento_stockprep: # Solo llamar si la importación fue exitosa
+                 ejecutar_procesamiento_stockprep(directory_to_process, self.gui_status_update)
+            else:
+                 self.gui_status_update("ERROR: La lógica de procesamiento no está disponible.")
+
+        except Exception as e:
+            # Capturamos cualquier error inesperado durante el procesamiento
+            self.gui_status_update(f"ERROR INESPERADO en el hilo de procesamiento: {e}")
+            # Usamos traceback.format_exc() para obtener la traza completa del error y mostrarla
+            self.gui_status_update(traceback.format_exc())
+        finally:
+            # Este bloque 'finally' always se ejecuta al salir del try/except,
+            # ya sea por éxito o por error.
+
+            # Asegura que el botón se reactive.
+            # Esto DEBE hacerse en el hilo principal de la GUI.
+            if self.master.winfo_exists(): # Comprobar si la ventana aún existe
+                self.master.after(0, lambda: self.process_button.config(state=tk.NORMAL)) # Programar reactivación en hilo principal
+
+
+# Este bloque solo se ejecuta si corres este archivo gui.py directamente.
+# La ejecución principal vendrá de main.py. Si corres este archivo directamente, necesitas
+# que core_logic sea importable (ej. si estás en el directorio src/ o si src/ está en PYTHONPATH)
+if __name__ == '__main__':
+    # Puedes descomentar el código de simulación en la respuesta anterior si quieres probar la GUI
+    # sin depender de core_logic y el modelo de IA cargado.
+    # Asegúrate de que 'ejecutar_procesamiento_stockprep' esté definido (ya sea real o dummy)
+
+    root = tk.Tk() # Crea la ventana principal de Tkinter
+    app = StockPrepAppGUI(root) # Crea una instancia de nuestra clase GUI
+    root.mainloop() # Inicia el bucle principal de eventos de la GUI

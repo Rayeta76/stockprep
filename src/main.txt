@@ -1,0 +1,83 @@
+# e:\Proyectos\StockPrep\src\main.py
+
+import sys # Para manejar argumentos de línea de comandos (eventualmente)
+import tkinter as tk # Necesario si lanzamos la GUI
+import os # Necesario para determinar la ruta base en modo CLI si se implementa
+
+# Importar la clase de la GUI y la función de lógica principal
+# Usamos imports relativos porque gui.py y core_logic.py están en el mismo paquete 'src'
+try:
+    from .gui import StockPrepAppGUI
+    from .core_logic import ejecutar_procesamiento_stockprep # Importamos también por si añadimos modo CLI real
+except ImportError:
+     # Fallback si main.py no se ejecuta correctamente como parte de un paquete
+     # Esto puede ocurrir si ejecutas "python main.py" desde src/ en lugar de "python src/main.py" desde la raíz
+     print("ADVERTENCIA: Falló el import relativo en main.py. Intentando import directo.")
+     try:
+         from gui import StockPrepAppGUI
+         from core_logic import ejecutar_procesamiento_stockprep
+     except ImportError:
+         print("ERROR FATAL: No se pudo importar gui o core_logic.")
+         print("Asegúrate de que los archivos existen y no tienen errores, y de que estás ejecutando desde la raíz del proyecto StockPrep usando 'python src/main.py'.")
+         # Asegurarnos de que las variables existan pero sean None para evitar NameError
+         StockPrepAppGUI = None
+         ejecutar_procesamiento_stockprep = None
+
+
+# --- Funciones para Modos de Ejecución ---
+
+# Función callback para el modo consola (CLI) - simplemente imprime
+def console_status_callback(message):
+    """Función de callback simple para imprimir mensajes en la consola."""
+    print(message)
+
+def run_cli_mode():
+    """
+    Función placeholder para ejecutar la aplicación en modo línea de comandos.
+    Actualmente no implementada completamente, solo para demostración.
+    """
+    if ejecutar_procesamiento_stockprep is None:
+         console_status_callback("ERROR: No se pudo importar la lógica principal para el modo CLI.")
+         return
+         
+    console_status_callback("Ejecutando StockPrep en modo Línea de Comandos (CLI) - Funcionalidad completa por implementar.")
+    
+    # Determinar el directorio base del proyecto en modo CLI
+    # Asume que el script main.py está en src/ y el proyecto es el directorio padre de src/
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.abspath(os.path.join(script_dir, '..'))
+    
+    console_status_callback(f"Usando directorio base del proyecto: {base_dir}")
+    
+    # En un modo CLI real, podrías añadir lógica aquí para:
+    # 1. Tomar la ruta base y otras opciones (ej. --input-folder, --output-folder) de sys.argv
+    # 2. Cargar la versión REAL del modelo IA (sin la simulación)
+    # 3. Llamar a ejecutar_procesamiento_stockprep(base_dir, console_status_callback)
+    
+    console_status_callback("Modo CLI simulado finalizado.")
+
+
+def run_gui_mode():
+    """Lanza la interfaz gráfica de usuario."""
+    if StockPrepAppGUI is None:
+         console_status_callback("ERROR: No se pudo importar la clase de la GUI.")
+         return
+
+    console_status_callback("Lanzando StockPrep en modo Interfaz Gráfica (GUI)...")
+    root = tk.Tk() # Crea la ventana principal de Tkinter
+    app = StockPrepAppGUI(root) # Crea una instancia de nuestra clase GUI, pasándole la ventana raíz
+    root.mainloop() # Inicia el bucle principal de eventos de la GUI. Mantiene la ventana abierta y responde a eventos.
+
+
+# --- Punto de Entrada Principal del Programa ---
+# Este bloque se ejecuta solo cuando corres este archivo directamente.
+if __name__ == "__main__":
+    # Lógica para decidir si correr en modo GUI o CLI basándonos en argumentos de línea de comandos.
+    
+    # Podemos añadir un argumento --cli para ejecutar en modo consola (a implementar)
+    # Comprobar si "--cli" está entre los argumentos pasados al script
+    if "--cli" in sys.argv:
+        run_cli_mode()
+    else:
+        # Por defecto (si no hay --cli), lanzar la GUI
+        run_gui_mode()

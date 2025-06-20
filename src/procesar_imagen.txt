@@ -1,0 +1,76 @@
+# e:\Proyectos\StockPrep\src\procesar_imagen.py
+
+import time # Necesario para simular tiempos de espera
+import os   # Necesario para os.path.basename
+# NO importamos torch, transformers, PIL con el modelo real todavía
+
+# --- Funciones de Procesamiento de Imagen (Simuladas) ---
+
+# Variables globales simuladas para el modelo cargado
+modelo_ia_simulado_cargado = False
+
+def cargar_modelo_ia(status_callback=print, force_reload=False):
+    """
+    SIMULADO: Carga el modelo Florence-2.
+    Solo simula la carga y reporta el estado. No carga un modelo real.
+    """
+    global modelo_ia_simulado_cargado
+
+    if not force_reload and modelo_ia_simulado_cargado:
+        status_callback("AI (SIM): Modelo simulado ya está 'cargado'.")
+        return "procesador_simulado", "modelo_simulado", True # Simular éxito y GPU
+
+    status_callback("AI (SIM): Simulando carga del modelo IA... (Espera 2 segundos)")
+    time.sleep(2) # Simular tiempo de carga
+    
+    # Simular éxito en la carga
+    modelo_ia_simulado_cargado = True
+    status_callback("AI (SIM): Modelo simulado 'cargado' exitosamente.")
+    return "procesador_simulado", "modelo_simulado", True # Devolvemos valores dummy, True para GPU simulada
+
+    # Para simular un fallo, descomenta esto y comenta lo de arriba:
+    # status_callback("AI (SIM): Simulando FALLO al cargar el modelo IA.")
+    # modelo_ia_simulado_cargado = False
+    # return None, None, False
+
+
+def describir_imagen_ia(ruta_imagen, procesador, modelo, status_callback=print, task_prompt="<CAPTION>"):
+    """
+    SIMULADO: Genera una descripción para una imagen usando el modelo.
+    Solo simula la descripción y reporta el estado.
+    """
+    if not modelo_ia_simulado_cargado:
+         status_callback("AI (SIM) ERROR: Intentando describir sin modelo simulado 'cargado'.")
+         return "Error simulado: Modelo no cargado."
+
+    nombre_archivo = os.path.basename(ruta_imagen)
+    status_callback(f"AI (SIM): Simulando descripción para {nombre_archivo}... (Espera 1 segundo)")
+    time.sleep(1) # Simular tiempo de procesamiento
+
+    # Generar una descripción simulada basada en el nombre del archivo
+    descripcion_simulada = f"Una imagen simulada del archivo {nombre_archivo}, mostrando un objeto genérico y un fondo abstracto con colores vibrantes y detalles complejos, con un enfoque artístico y de alta calidad. Generada por IA."
+    
+    status_callback(f"AI (SIM): Descripción simulada generada para {nombre_archivo}.")
+    return descripcion_simulada
+
+
+def extraer_hashtags(descripcion, max_hashtags=15, min_longitud_palabra=3, status_callback=print):
+    """
+    SIMULADO: Extrae hashtags de una descripción.
+    Solo simula la extracción.
+    """
+    # Esta versión dummy no usa 're' todavía, aunque la versión real sí lo necesitará.
+    # Pero por simplicidad de la simulación, no lo importamos ni usamos aún.
+
+    if not descripcion or descripcion.startswith("Error"):
+        return []
+
+    status_callback("AI (SIM): Simulando extracción de hashtags...")
+    
+    # Simular algunos hashtags basados en la descripción simulada
+    hashtags_simulados = ["simulado", "imagen", "generada", "ia", "test", "prueba", "stockprep"]
+    
+    return hashtags_simulados[:max_hashtags]
+
+
+# No hay "if __name__ == '__main__':" aquí, ya que es solo un módulo de IA (simulada).
